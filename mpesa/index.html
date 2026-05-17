@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M-Pesa Teste MZ</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; padding: 40px; }
+        .container { max-width: 600px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        input { width: 95%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+        button { background-color: #e60000; color: white; border: none; padding: 15px 20px; font-size: 16px; border-radius: 4px; cursor: pointer; width: 100%; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        pre { background: #333; color: #00ff00; padding: 15px; overflow-x: auto; border-radius: 4px; }
+        #status { margin-top: 15px; font-weight: bold; color: #333; text-align: center;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Pagamento M-Pesa (Vodacom MZ)</h2>
+    <p>Digite o seu número M-Pesa para receber a cobrança de 10 MT:</p>
+    
+    <input type="text" id="numeroCelular" placeholder="Ex: 840000000 ou 850000000" required>
+    
+    <button id="btnPagar">Pagar 10 MT</button>
+    
+    <div id="status">Pronto para iniciar.</div>
+    <pre id="resultado">Aguardando...</pre>
+</div>
+
+<script>
+    document.getElementById('btnPagar').addEventListener('click', async function() {
+        const btn = this;
+        const statusBox = document.getElementById('status');
+        const resultadoBox = document.getElementById('resultado');
+        const numero = document.getElementById('numeroCelular').value;
+
+        if(!numero) {
+            alert("Por favor, digite o seu número de celular!");
+            return;
+        }
+
+        btn.disabled = true;
+        resultadoBox.textContent = "";
+        
+        try {
+            statusBox.textContent = "1. Solicitando autorização do sistema...";
+            const sessionReq = await fetch('/api/getSession', { method: 'POST' });
+            const sessionData = await sessionReq.json();
+            
+            if (!sessionData.output_SessionID) {
+                throw new Error("Falha ao obter Session ID. Verifique suas credenciais.");
+            }
+            
+            const sessionId = sessionData.output_SessionID;
+            
+            // Contagem da Sandbox (30 segundos)
+            let tempoRestante = 30;
+            const intervalo = setInterval(() => {
+                statusBox.textContent = `2. Aguardando ativação da Sandbox... ${tempoRestante}s`;
+                tempoRestante--;
+            }, 1000);
+
+            await new Promise(resolve => setTimeout(resolve, 30000));
+            clearInterval(intervalo);
+            
+            statusBox.textContent = "3. Enviando cobrança para " + numero + "...";
+            
+            const paymentReq = await fetch('/api/makePayment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    sessionId: sessionId,
+                    telefone: numero 
+                })
+            });
+            
+            const paymentData = await paymentReq.json();
+            
+            statusBox.textContent = "Operação concluída! Verifique o seu celular.";
+            resultadoBox.textContent = JSON.stringify(paymentData, null, 2);
+
+        } catch (error) {
+            statusBox.textContent = "Ocorreu um erro.";
+            resultadoBox.textContent = error.message;
+        } finally {
+            btn.disabled = false;
+        }
+    });
+</script>
+
+</body>
+</html>
